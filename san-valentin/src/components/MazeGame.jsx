@@ -7,7 +7,7 @@ const MAZE = [
   [1,2,0,0,1,0,0,0,1,0,5,0,1],
   [1,1,1,0,1,0,1,0,1,0,1,0,1],
   [1,0,0,0,0,0,1,0,0,0,1,0,1],
-  [1,0,1,1,1,0,1,1,1,0,1,0,1],
+  [1,0,1,1,1,4,1,1,1,0,1,0,1],
   [1,0,1,0,0,0,0,0,1,0,0,0,1],
   [1,0,1,0,1,1,1,0,1,1,1,0,1],
   [1,0,0,0,1,4,1,0,0,0,1,0,1],
@@ -19,7 +19,7 @@ const MAZE = [
 ];
 
 const START_TIME = 20;
-const BONUS_SECONDS = 3;
+const BONUS_SECONDS = 2;
 const HOLD_INTERVAL = 130;
 const MOBILE_MAX_WIDTH = 900;
 
@@ -147,7 +147,7 @@ export default function MazeGame({
         // goal
         if (cell === 3) {
           setCanMove(false);
-          setTimeout(() => setCompleted(true), 650);
+          setTimeout(() => setCompleted(true), 750);
         }
 
         return { x: newX, y: newY };

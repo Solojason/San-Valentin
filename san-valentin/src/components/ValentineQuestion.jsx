@@ -4,7 +4,10 @@ import "../styles/question.css";
 const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
 
 export default function ValentineQuestion({
-  names = { primary: "Jennyfer Geovana Salas", nicknames: ["amor", "babe", "bonita", "JennGeovis"] },
+  names = {
+    primary: "JennGeovis",
+    nicknames: ["amor", "babe", "bonita", "JennGeovis"],
+  },
   onYes,
 }) {
   const nickname = useMemo(() => {
@@ -14,131 +17,208 @@ export default function ValentineQuestion({
 
   const [noClicks, setNoClicks] = useState(0);
   const [status, setStatus] = useState("");
-  const [noPos, setNoPos] = useState({ x: 60, y: 150 }); // px dentro del contenedor
+  const [noPos, setNoPos] = useState({ x: 18, y: 260 });
   const [isEscaping, setIsEscaping] = useState(false);
 
-  const arenaRef = useRef(null);
+  const arenaRef = useRef(null);     // ✅ ahora el área completa verde es el límite
   const noBtnRef = useRef(null);
 
-  const yesScale = useMemo(() => {
-    // crece pero con límite (no cubrir pantalla)
-    return clamp(1 + noClicks * 0.10, 1, 1.55);
-  }, [noClicks]);
+  const lastEscapeAtRef = useRef(0);
 
+  const yesScale = useMemo(() => clamp(1 + noClicks * 0.1, 1, 1.55), [noClicks]);
   const escapeEnabled = noClicks >= 3;
 
+  const bullyMessages = useMemo(
+    () => [
+      `JAJA ${nickname}… ese NO no coopera. Elige el otro botón 😌💖`,
+      `${nickname}, ¿cómo le hiciste para darle? 😳 Ok… intenta con el SÍ 🙈`,
+      `Eso fue trampa, ${nickname}. El NO está en huelga. Vete al SÍ 💘`,
+      `Mira nada más… ${nickname} hackeando el NO. Mejor pica SÍ 😈`,
+      `El NO: “yo ya no trabajo aquí”. Tú: *clic*. ${nickname}, pica SÍ 💖`,
+      `Plot twist: el NO es decorativo 😌 ${nickname}, elige SÍ`,
+      `Ok, ${nickname}, ya fue suficiente. El botón correcto es el SÍ 🌹`,
+    ],
+    [nickname]
+  );
+
+  // ✅ Posición aleatoria dentro de TODO el recuadro verde (arena)
   const computeRandomPos = useCallback(() => {
-    const arena = arenaRef.current;
+    const area = arenaRef.current;
     const btn = noBtnRef.current;
-    if (!arena || !btn) return;
+    if (!area || !btn) return;
 
-    const pad = 12;
-    const rect = arena.getBoundingClientRect();
-    const b = btn.getBoundingClientRect();
+    const padding = 14;
 
-    const maxX = Math.max(pad, rect.width - b.width - pad);
-    const maxY = Math.max(pad, rect.height - b.height - pad);
+    const areaRect = area.getBoundingClientRect();
+    const btnRect = btn.getBoundingClientRect();
 
-    const x = Math.floor(pad + Math.random() * (maxX - pad));
-    const y = Math.floor(pad + Math.random() * (maxY - pad));
+    // Opcional: si quieres evitar tapar el footnote, deja un pequeño margen abajo:
+    const bottomSafe = 44; // px (ajusta si quieres más aire)
+    const topSafe = 6;     // px
+
+    const maxX = Math.max(0, areaRect.width - btnRect.width - padding * 2);
+    const maxY = Math.max(
+      0,
+      areaRect.height - btnRect.height - padding * 2 - bottomSafe - topSafe
+    );
+
+    const x = Math.round(padding + Math.random() * maxX);
+    const y = Math.round(topSafe + padding + Math.random() * maxY);
 
     setNoPos({ x, y });
   }, []);
 
-  const onClickNo = () => {
+  // ✅ Difícil pero no imposible (probabilidad + cooldown)
+  const maybeEscape = useCallback(
+    (chance = 0.65) => {
+      if (!escapeEnabled) return;
+
+      const now = performance.now();
+      const cooldownMs = 260; // ↑ más posible, ↓ más difícil
+      if (now - lastEscapeAtRef.current < cooldownMs) return;
+
+      if (Math.random() < chance) {
+        lastEscapeAtRef.current = now;
+        computeRandomPos();
+      }
+    },
+    [escapeEnabled, computeRandomPos]
+  );
+
+  const handleNoClick = () => {
     const next = noClicks + 1;
     setNoClicks(next);
 
-    if (next === 1) setStatus(`Creo que te equivocaste, ${nickname}… selecciona otra vez 😌`);
-    if (next === 2) setStatus(`Ok ok… ${nickname}, pero eso sonó sospechoso 😅 intenta de nuevo`);
-    if (next === 3) {
-      setStatus(`Uy… ya vi. A partir de ahora el NO entra en “modo cobarde” 😈`);
-      setIsEscaping(true);
-      // muévete inmediatamente
-      setTimeout(() => computeRandomPos(), 60);
+    if (next === 1) {
+      setStatus("Me parece que te equivocaste… te doy otra oportunidad 😌");
+      return;
     }
-    if (next > 3) {
-      setStatus(`JAJA ${nickname}… ese NO no coopera. Elige el otro botón 😌💖`);
-      setIsEscaping(true);
-      computeRandomPos();
-    }
-  };
 
-  const onMouseEnterNo = () => {
-    if (!escapeEnabled) return;
+    if (next === 2) {
+      setStatus(`¿Segura?, ${nickname}… piénsalo bien 🥺`);
+      return;
+    }
+
+    if (next === 3) {
+      setStatus("Me parece que no has seleccionado el indicado 😈");
+      setIsEscaping(true);
+
+      // ✅ al activar escape, muévete dentro del recuadro verde
+      requestAnimationFrame(() => computeRandomPos());
+      return;
+    }
+
+    // > 3: si logra darle, mensaje aleatorio + mover
+    const randomMsg =
+      bullyMessages[Math.floor(Math.random() * bullyMessages.length)];
+    setStatus(randomMsg);
+    setIsEscaping(true);
     computeRandomPos();
   };
 
-  // “radar”: si el mouse se acerca, se mueve (hace casi imposible agarrarlo)
+  // ✅ hover: huye casi siempre pero deja chance
+  const handleNoHover = () => {
+    if (!escapeEnabled) return;
+    maybeEscape(0.85);
+  };
+
+  // ✅ radar en TODO el recuadro verde (mouse/touch/pen)
   useEffect(() => {
     if (!escapeEnabled) return;
 
-    const arena = arenaRef.current;
+    const area = arenaRef.current;
     const btn = noBtnRef.current;
-    if (!arena || !btn) return;
+    if (!area || !btn) return;
 
-    const threshold = 110; // px
+    const threshold = 140; // un poco más para que se sienta vivo
+
     const handleMove = (e) => {
-      const br = btn.getBoundingClientRect();
-      const cx = br.left + br.width / 2;
-      const cy = br.top + br.height / 2;
-      const dx = e.clientX - cx;
-      const dy = e.clientY - cy;
+      const rect = btn.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+
+      const x = e.clientX ?? e.touches?.[0]?.clientX;
+      const y = e.clientY ?? e.touches?.[0]?.clientY;
+      if (x == null || y == null) return;
+
+      const dx = x - cx;
+      const dy = y - cy;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
-      if (dist < threshold) computeRandomPos();
+      // ✅ si te acercas, a veces huye (no siempre)
+      if (dist < threshold) maybeEscape(0.60);
     };
 
-    arena.addEventListener("mousemove", handleMove);
-    return () => arena.removeEventListener("mousemove", handleMove);
-  }, [escapeEnabled, computeRandomPos]);
+    area.addEventListener("pointermove", handleMove);
+    return () => area.removeEventListener("pointermove", handleMove);
+  }, [escapeEnabled, maybeEscape]);
 
-  // posición inicial decente al montar (responsive)
+  // ✅ al activar escape por primera vez, reubica
   useEffect(() => {
-    // coloca el NO en un lugar random suave solo si escapará
-    if (escapeEnabled) computeRandomPos();
+    if (escapeEnabled) requestAnimationFrame(() => computeRandomPos());
   }, [escapeEnabled, computeRandomPos]);
 
   return (
     <div className="vq-wrap">
       <div className="vq-card">
-        <h1 className="vq-title">Oye {nickname}… 💘</h1>
-        <p className="vq-sub">
-          {names.primary} (pero yo te digo <strong>{nickname}</strong>), tengo una pregunta muy seria…
-        </p>
+        <h1 className="vq-title">Mi {nickname}… 💘</h1>
 
         <div className="vq-arena" ref={arenaRef}>
-          <p className="vq-question">¿Quieres ser mi San Valentín? 🌹</p>
+          <div className="vq-copy">
+            <p className="vq-lead">
+              Mi {nickname}, desde que llegaste a mi vida todo se siente más bonito… <br />
+              y si pudiera elegir un lugar favorito en el mundo, sería donde estés tú. <br />
+              <br />
+              Contigo aprendí que el amor no solo se dice… <br />
+              también se siente, se cuida y se disfruta. <br />
+              Y yo quiero seguir viviendo momentos contigo, uno tras otro…<br />
+              <br />
+              Por eso hoy quiero preguntarte algo muy especial…
+            </p>
+            <p className="vq-question">¿Quieres ser mi San Valentín? 🌹</p>
+          </div>
 
-          {status && <div className="vq-status">{status}</div>}
+          <div className="vq-status-slot">
+            {status ? (
+              <div className="vq-status">{status}</div>
+            ) : (
+              <div className="vq-status vq-status--ghost">.</div>
+            )}
+          </div>
 
-          <div className="vq-buttons">
-            <button
-              className="vq-yes"
-              style={{ transform: `scale(${yesScale})` }}
-              onClick={() => onYes?.()}
-            >
-              SÍ 💖
-            </button>
+          {/* ✅ SÍ fijo (crece) */}
+          <div className="vq-controls">
+            <div className="vq-yes-slot">
+              <button
+                className="vq-yes"
+                style={{ transform: `scale(${yesScale})` }}
+                onClick={() => onYes?.()}
+              >
+                SÍ 💖
+              </button>
+            </div>
 
+            {/* ✅ NO normal mientras no escape */}
+            {!escapeEnabled && (
+              <button className="vq-no" onClick={handleNoClick}>
+                NO 😶
+              </button>
+            )}
+          </div>
+
+          {/* ✅ NO en modo cobarde: se mueve por todo el recuadro verde y NO se oculta */}
+          {escapeEnabled && (
             <button
               ref={noBtnRef}
-              className={`vq-no ${isEscaping ? "vq-no--escape" : ""}`}
-              onClick={onClickNo}
-              onMouseEnter={onMouseEnterNo}
-              style={
-                escapeEnabled
-                  ? { left: noPos.x, top: noPos.y, position: "absolute" }
-                  : undefined
-              }
+              className={`vq-no vq-no--free ${isEscaping ? "vq-no--escape" : ""}`}
+              onClick={handleNoClick}
+              onMouseEnter={handleNoHover}
+              onPointerDown={() => maybeEscape(0.45)} // ✅ chance real de atraparlo
+              style={{ left: noPos.x, top: noPos.y }}
             >
               NO 😶
             </button>
-          </div>
-
-          <p className="vq-footnote">
-            *Nota legal: elegir “SÍ” aumenta el romance en un 200%. Elegir “NO”… pues no aplica 😌
-          </p>
+          )}
         </div>
       </div>
     </div>
